@@ -22,6 +22,7 @@ import { closeGuestTabsById } from '@/lib/guests/tabs';
 import { updateGuest } from '@/lib/guests/updates';
 import { useI18n } from '@/lib/i18n';
 import { getRuntimeKey } from '@/lib/runtime-switch';
+import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { openExternalUrl } from '@/lib/url';
 import { useUIStore } from '@/stores/useUIStore';
 import {
@@ -210,7 +211,8 @@ export const CatalogExtensionsSection: React.FC<CatalogExtensionsSectionProps> =
     );
   };
 
-  if (catalogStatus === 'unsupported') return null;
+  // Mobile loads the catalog for its drawer panels, but installing stays on desktop and web.
+  if (catalogStatus === 'unsupported' || isMobileSurfaceRuntime()) return null;
 
   return (
     <>

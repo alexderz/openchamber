@@ -65,7 +65,8 @@ const EMPTY_STATUS_SECTIONS: InstalledGuest[] = [];
 
 /**
  * Active guests that contribute a Work Status section. Empty on VS Code and
- * mobile, which never mount guests (the panel itself is web/desktop only).
+ * mobile, which have no Work Status panel for guests (mobile loads the catalog
+ * for its drawer panels only).
  * Reads the store only; the rail owns loading the catalog.
  */
 export const useGuestStatusSections = (): InstalledGuest[] => {
@@ -79,7 +80,7 @@ export const useGuestStatusSections = (): InstalledGuest[] => {
 
 /**
  * Message and session menu entries from active guests. Empty on VS Code and
- * mobile, which never mount guests. Reads the store only: every transcript
+ * mobile, which offer no guest actions. Reads the store only: every transcript
  * row and sidebar row calls this, and the rail (`useGuestSurfaces`) already
  * owns loading the catalog and following runtime switches. The store is
  * emptied on a switch, so a memo on `guests` alone stays current.

@@ -1,11 +1,21 @@
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { runtimeFetch } from '@/lib/runtime-fetch';
-import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
+import { isCapacitorApp } from '@/lib/platform';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 
 import { useGuestBadgeStore } from './badge-store.ts';
 import { parseGuestCatalogJson } from './parse.ts';
 import { useGuestsStore } from './store.ts';
+
+/**
+ * Runtimes that never load the catalog. VS Code has no panel host for
+ * extensions. The Capacitor app has not been tested with extension frames in
+ * its WebView, so it stays off until someone does. The hosted mobile surface
+ * (a phone or tablet browser) loads the catalog: its workspace drawer shows
+ * the panels, while every other consumer gates itself on
+ * `isMobileSurfaceRuntime()`.
+ */
+const catalogUnsupportedHere = (): boolean => isVSCodeRuntime() || isCapacitorApp();
 
 const alignCatalogRuntime = (runtimeKey: string): void => {
   const store = useGuestsStore.getState();
@@ -37,7 +47,7 @@ const loadGuestCatalogOnce = async (runtimeKey: string): Promise<void> => {
   alignCatalogRuntime(runtimeKey);
 
   const store = useGuestsStore.getState();
-  if (isVSCodeRuntime() || isMobileSurfaceRuntime()) {
+  if (catalogUnsupportedHere()) {
     store.markUnsupported(runtimeKey);
     return;
   }

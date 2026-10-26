@@ -77,8 +77,8 @@ export const resolveGuestToolPresentation = (fullToolName: string | undefined | 
 /**
  * The rule for one rendered tool part. Subscribes to the catalog array only,
  * which changes on load, install, pause, approval, and runtime switch, never
- * while a tool streams. VS Code and mobile keep the store empty, so this is
- * `null` there.
+ * while a tool streams. VS Code and the Capacitor app keep the store empty, so
+ * this is `null` there; hosted mobile loads the catalog and applies the rules.
  */
 export const useGuestToolPresentation = (fullToolName: string | undefined | null): GuestToolRule | null => {
   const guests = useGuestsStore((state) => state.guests);

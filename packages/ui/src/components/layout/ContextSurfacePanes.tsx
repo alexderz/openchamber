@@ -18,9 +18,8 @@ import { registerBrowserCloser, registerBrowserOpener, registerSleepingBrowserTa
 import { pickLiveBrowserTabs, touchRecentBrowserTab } from '@/lib/browser/liveTabs';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import { useGuestsStore } from '@/lib/guests/store';
-import { guestHasSharedSurface, guestSurfaceDocking, type GuestSurfaceDocking } from '@/lib/guests/surfaces';
-import { GUEST_SURFACE_DOCK_SIZE_MIN } from '@openchamber/sdk';
-import { isPluginContextPanelMode, pluginIdFromMode, type PluginContextPanelMode } from '@/lib/surfaces/modes';
+import { guestPanelLayout, guestPanelUnmountsWhenHidden, type GuestPanelLayout } from '@/lib/guests/surfaces';
+import { isPluginContextPanelMode, pluginIdFromMode } from '@/lib/surfaces/modes';
 import {
   getZoneView,
   resolveZoneActiveTab,
@@ -37,6 +36,7 @@ import { MovablePane } from './MovablePane';
 import { SidebarFilesTree } from './SidebarFilesTree';
 import { closeZoneOnEscape } from './zoneEscape';
 import { startZoneDragGesture } from './zoneDrag';
+import { GuestPanelContent } from './GuestPanelContent';
 import { ZoneSurfaceDragContext } from './zoneSurfaceDragContext';
 import { useZoneHostsStore } from './zoneHosts';
 import { useRightSlotStore } from './rightSlot';
@@ -51,43 +51,6 @@ import { DockedPanelSurfaceContext } from '@/hooks/usePageColors';
 const WalkthroughView = lazyWithChunkRecovery(() => import('@/components/views/walkthrough/WalkthroughView').then((m) => ({ default: m.WalkthroughView })));
 const DiffView = lazyWithChunkRecovery(() => import('@/components/views/DiffView').then((m) => ({ default: m.DiffView })));
 const FilesView = lazyWithChunkRecovery(() => import('@/components/views/FilesView').then((m) => ({ default: m.FilesView })));
-const PluginPane = React.lazy(() => import('./PluginPane').then((module) => ({ default: module.PluginPane })));
-const GuestSurfacePane = React.lazy(() => import('./GuestSurfacePane').then((module) => ({ default: module.GuestSurfacePane })));
-
-// How an extension page sits beside its shared surface: flex direction puts
-// the page first on top/left and last on bottom/right; the page's size is
-// fixed across the docked edge and the picture takes the rest.
-const DOCK_LAYOUT = {
-  top: { container: 'flex-col', page: 'border-b border-border', vertical: true },
-  bottom: { container: 'flex-col-reverse', page: 'border-t border-border', vertical: true },
-  left: { container: 'flex-row', page: 'border-e border-border', vertical: false },
-  right: { container: 'flex-row-reverse', page: 'border-s border-border', vertical: false },
-} as const;
-
-/**
- * A shared-surface extension's own page, docked to one edge of the picture.
- * It starts at the manifest's `panel.size` and follows the page's
- * `host.setHeight` after that (the thickness across its edge, so a width
- * for a left or right dock), never below the manifest minimum and never past
- * half the panel, so the picture always stays in view.
- */
-const DockedGuestPage: React.FC<{ mode: PluginContextPanelMode; docking: GuestSurfaceDocking }> = ({ mode, docking }) => {
-  const [requested, setRequested] = React.useState<number | null>(null);
-  const layout = DOCK_LAYOUT[docking.dock];
-  const size = Math.max(GUEST_SURFACE_DOCK_SIZE_MIN, requested ?? docking.size);
-  return (
-    <div
-      className={cn(
-        'shrink-0 overflow-hidden duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
-        layout.vertical ? 'max-h-[50%] transition-[height]' : 'max-w-[50%] transition-[width]',
-        layout.page,
-      )}
-      style={layout.vertical ? { height: size } : { width: size }}
-    >
-      <PluginPane mode={mode} onResize={setRequested} />
-    </div>
-  );
-};
 
 /** A browser tab with the project it belongs to, which may not be the one on screen. */
 type PanelBrowserTab = {
@@ -566,19 +529,10 @@ export const ContextSurfacePanes: React.FC = () => {
   const walkthroughTab = React.useMemo(() => tabs.find((tab) => tab.mode === 'walkthrough') ?? null, [tabs]);
   const pluginTabs = React.useMemo(() => tabs.filter((tab) => isPluginContextPanelMode(tab.mode)), [tabs]);
   const guests = useGuestsStore((state) => state.guests);
-  const surfaceGuestIds = React.useMemo(
-    () => new Set(guests.filter(guestHasSharedSurface).map((guest) => guest.id)),
+  const panelLayouts = React.useMemo(
+    () => new Map<string, GuestPanelLayout>(guests.map((guest) => [guest.id, guestPanelLayout(guest)])),
     [guests],
   );
-  // Surface extensions that also ship a page: it is docked to one edge of the picture.
-  const surfaceDockings = React.useMemo(() => {
-    const dockings = new Map<string, GuestSurfaceDocking>();
-    for (const guest of guests) {
-      const docking = guestSurfaceDocking(guest);
-      if (docking) dockings.set(guest.id, docking);
-    }
-    return dockings;
-  }, [guests]);
 
   // A terminal tab dragged out of the terminal's own strip moves the terminal.
   const terminalZoneOfPlacement = terminalZone.zone;
@@ -752,11 +706,10 @@ export const ContextSurfacePanes: React.FC = () => {
         // docked to one edge of the picture and stays mounted like any
         // panel iframe.
         const guestId = pluginIdFromMode(tab.mode);
-        const sharedSurface = surfaceGuestIds.has(guestId);
-        const docking = surfaceDockings.get(guestId);
+        const layout = panelLayouts.get(guestId) ?? guestPanelLayout(undefined);
         const shown = pluginZone.activeTab?.id === tab.id;
         const surfaceMounted = shown && pluginZone.isOpen;
-        if (sharedSurface && !docking && !surfaceMounted) return null;
+        if (guestPanelUnmountsWhenHidden(layout) && !surfaceMounted) return null;
         return (
           <ZonePane
             key={tab.id}
@@ -767,20 +720,7 @@ export const ContextSurfacePanes: React.FC = () => {
             directoryKey={directoryKey}
             className={cn('absolute inset-0', shown ? 'block' : 'hidden')}
           >
-            <React.Suspense fallback={null}>
-              {!sharedSurface ? (
-                <PluginPane mode={tab.mode} />
-              ) : !docking ? (
-                <GuestSurfacePane mode={tab.mode} />
-              ) : (
-                <div className={cn('flex h-full', DOCK_LAYOUT[docking.dock].container)}>
-                  <DockedGuestPage mode={tab.mode} docking={docking} />
-                  <div className="min-h-0 min-w-0 flex-1">
-                    {surfaceMounted ? <GuestSurfacePane mode={tab.mode} /> : null}
-                  </div>
-                </div>
-              )}
-            </React.Suspense>
+            <GuestPanelContent mode={tab.mode} layout={layout} surfaceShown={surfaceMounted} />
           </ZonePane>
         );
       })}
