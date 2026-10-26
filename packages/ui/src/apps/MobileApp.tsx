@@ -72,6 +72,7 @@ import { ArchiveSessionsView } from '@/components/views/ArchiveView';
 import { MobileSourceBoard } from '@/components/sourceBoard/SourceBoardView';
 import { OverviewPage } from '@/components/overview/OverviewView';
 import { ScheduledTasksView, type ScheduledTasksLeaveReason } from '@/components/session/ScheduledTasksDialog';
+import { MobileCoveredByPanel } from './MobileCoveredByPanel';
 import { MobileWorkspaceDrawer } from './MobileWorkspaceDrawer';
 import { useMobileGuestTabs } from '@/hooks/useMobileGuestTabs';
 import { resolveMobileWorkspaceTab, shownMobileWorkspaceTabs, type MobileWorkspaceTab } from '@/lib/mobileWorkspaceTabs';
@@ -516,80 +517,84 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
             its header butt against it (iPadOS-style split layout). Always
             mounted so open/close animates width, same as the desktop Sidebar. */}
         {isTabletLayout ? (
-          <aside
-            ref={leftResize.asideRef}
-            className={cn(
-              // bg-background, not bg-sidebar: the session/worktree/project
-              // rows are opaque bg-background (the swipe actions live under
-              // them), so a tinted sidebar would show through as row-shaped
-              // bands. Same surface as the phone drawer.
-              'oc-ipad-sidebar relative flex h-full shrink-0 flex-col overflow-hidden border-e border-border/70 bg-background will-change-[width] motion-reduce:transition-none',
-              !sidebarOpen && 'border-e-0',
-            )}
-            style={{
-              width: sidebarOpen ? leftResize.width : 0,
-              minWidth: sidebarOpen ? leftResize.width : 0,
-              maxWidth: sidebarOpen ? leftResize.width : 0,
-              ['--oc-ipad-sidebar-width' as string]: `${leftResize.width}px`,
-              overflowX: 'clip',
-              paddingTop: 'var(--oc-safe-area-top, 0px)',
-              transitionProperty: leftResize.isResizing ? 'none' : 'width, min-width, max-width',
-              transitionDuration: '200ms',
-              transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
-            }}
-            aria-hidden={!sidebarOpen}
-            data-page-scroll-lock="true"
-          >
-            <div
+          <MobileCoveredByPanel covered={workspaceExpanded}>
+            <aside
+              ref={leftResize.asideRef}
               className={cn(
-                'flex h-full shrink-0 flex-col transition-opacity duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
-                leftResize.isResizing && 'pointer-events-none',
-                !sidebarOpen && 'pointer-events-none select-none opacity-0',
+                // bg-background, not bg-sidebar: the session/worktree/project
+                // rows are opaque bg-background (the swipe actions live under
+                // them), so a tinted sidebar would show through as row-shaped
+                // bands. Same surface as the phone drawer.
+                'oc-ipad-sidebar relative flex h-full shrink-0 flex-col overflow-hidden border-e border-border/70 bg-background will-change-[width] motion-reduce:transition-none',
+                !sidebarOpen && 'border-e-0',
               )}
-              style={{ width: 'var(--oc-ipad-sidebar-width)', overflowX: 'hidden' }}
+              style={{
+                width: sidebarOpen ? leftResize.width : 0,
+                minWidth: sidebarOpen ? leftResize.width : 0,
+                maxWidth: sidebarOpen ? leftResize.width : 0,
+                ['--oc-ipad-sidebar-width' as string]: `${leftResize.width}px`,
+                overflowX: 'clip',
+                paddingTop: 'var(--oc-safe-area-top, 0px)',
+                transitionProperty: leftResize.isResizing ? 'none' : 'width, min-width, max-width',
+                transitionDuration: '200ms',
+                transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
+              }}
+              aria-hidden={!sidebarOpen}
+              data-page-scroll-lock="true"
             >
-              <ErrorBoundary>
-                <MobileSessionsSheet
-                  open={sidebarOpen}
-                  variant="sidebar"
-                  // The surface asks to close after picking a session/project
-                  // or creating a worktree: give the space back to the chat
-                  // where the sidebar is a guest, keep it put where it is not.
-                  onOpenChange={(value) => {
-                    if (!value && !roomyForPanels) setSidebarOpen(false);
-                  }}
-                  footer={sessionsFooter}
+              <div
+                className={cn(
+                  'flex h-full shrink-0 flex-col transition-opacity duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+                  leftResize.isResizing && 'pointer-events-none',
+                  !sidebarOpen && 'pointer-events-none select-none opacity-0',
+                )}
+                style={{ width: 'var(--oc-ipad-sidebar-width)', overflowX: 'hidden' }}
+              >
+                <ErrorBoundary>
+                  <MobileSessionsSheet
+                    open={sidebarOpen}
+                    variant="sidebar"
+                    // The surface asks to close after picking a session/project
+                    // or creating a worktree: give the space back to the chat
+                    // where the sidebar is a guest, keep it put where it is not.
+                    onOpenChange={(value) => {
+                      if (!value && !roomyForPanels) setSidebarOpen(false);
+                    }}
+                    footer={sessionsFooter}
+                  />
+                </ErrorBoundary>
+              </div>
+              {/* After the content, not before it: panes stack their own overlays
+                  and the handle has to sit above every one of them. */}
+              {sidebarOpen ? (
+                <IpadSidebarResizeHandle
+                  side="left"
+                  isResizing={leftResize.isResizing}
+                  ariaLabel={t('sidebar.resize.leftPanelAria')}
+                  handleProps={leftResize.handleProps}
                 />
-              </ErrorBoundary>
-            </div>
-            {/* After the content, not before it: panes stack their own overlays
-                and the handle has to sit above every one of them. */}
-            {sidebarOpen ? (
-              <IpadSidebarResizeHandle
-                side="left"
-                isResizing={leftResize.isResizing}
-                ariaLabel={t('sidebar.resize.leftPanelAria')}
-                handleProps={leftResize.handleProps}
-              />
-            ) : null}
-          </aside>
+              ) : null}
+            </aside>
+          </MobileCoveredByPanel>
         ) : null}
 
-        <div className="flex h-full min-w-0 flex-1 flex-col" data-page-scroll-lock="true">
-          <MobileHeader
-            onOpenSessions={() => (isTabletLayout ? toggleSidebar() : setSessionsSheetOpen(true))}
-            onOpenWorkspace={openWorkspace}
-            compactTitle={isTabletLayout}
-          />
-          <main ref={chatMainRef} className="relative min-h-0 flex-1 overflow-hidden" data-page-scroll-lock="true">
-            <div className="h-full w-full">
-              <ErrorBoundary>
-                <ChatView />
-              </ErrorBoundary>
-            </div>
-            <ErrorBoundary><RunOverview /></ErrorBoundary>
-          </main>
-        </div>
+        <MobileCoveredByPanel covered={workspaceExpanded}>
+          <div className="flex h-full min-w-0 flex-1 flex-col" data-page-scroll-lock="true">
+            <MobileHeader
+              onOpenSessions={() => (isTabletLayout ? toggleSidebar() : setSessionsSheetOpen(true))}
+              onOpenWorkspace={openWorkspace}
+              compactTitle={isTabletLayout}
+            />
+            <main ref={chatMainRef} className="relative min-h-0 flex-1 overflow-hidden" data-page-scroll-lock="true">
+              <div className="h-full w-full">
+                <ErrorBoundary>
+                  <ChatView />
+                </ErrorBoundary>
+              </div>
+              <ErrorBoundary><RunOverview /></ErrorBoundary>
+            </main>
+          </div>
+        </MobileCoveredByPanel>
 
         {/* Mounted permanently on phones (parked off-screen while closed) so
             the sessions/worktree state stays warm and the drawer opens with

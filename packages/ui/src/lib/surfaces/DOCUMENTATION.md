@@ -177,6 +177,13 @@ workspace as a drawer, or as a side panel on a tablet
   expanded state is memory only: it resets when the panel closes and when
   `roomyForPanels` leaves (rotation, fold). Escape and the Android back button
   collapse an expanded panel first, then close as before.
+- Escape is layered: a surface above the panel (a plan, settings, the source
+  board) claims the key with `preventDefault` from a capture listener in
+  `MobileFullscreenSurface`, and the drawer skips a `defaultPrevented` Escape,
+  so one press closes the surface and leaves the panel under it alone.
+- Expanded, the covered chat column and tablet session sidebar are `inert`
+  (`MobileCoveredByPanel`), so Tab and the accessibility tree stay in the
+  panel; the inline panel and the phone drawer keep both reachable.
 - A runtime switch drops the visited panel tabs and keeps the built-in ones.
   `visitedTabs` is keyed by tab id alone, and the same `plugin:<id>` on the next
   server is a different extension; kept visited, its iframe would mount again

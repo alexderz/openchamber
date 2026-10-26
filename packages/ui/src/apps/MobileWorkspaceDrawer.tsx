@@ -175,6 +175,10 @@ export const MobileWorkspaceDrawer: React.FC<{
       if (event.key !== 'Escape' || tabRef.current === 'terminal') return;
       if (isVimEditorEventTarget(event.target)) return;
       if (isIMECompositionEvent(event)) return;
+      // A surface layered above (a plan, settings, the source board) claims
+      // Escape with `preventDefault` from a capture listener, so closing it and
+      // collapsing or closing the panel do not both happen on one press.
+      if (event.defaultPrevented) return;
       // Expanded over the app, Escape steps back to the side panel first; the
       // next Escape closes as it does today.
       if (expandedRef.current) {
