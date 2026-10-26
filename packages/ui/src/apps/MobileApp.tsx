@@ -157,6 +157,23 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     const { mobileWorkspaceTabOrder, mobileWorkspaceHiddenTabs } = useUIStore.getState();
     return shownMobileWorkspaceTabs(mobileWorkspaceTabOrder, mobileWorkspaceHiddenTabs)[0];
   });
+  // A user or trigger that names a tab owns that choice; the catalog-aware
+  // default below must not drag it away.
+  const workspaceTabChosenRef = React.useRef(false);
+  const selectWorkspaceTab = React.useCallback((next: MobileWorkspaceTab) => {
+    workspaceTabChosenRef.current = true;
+    setWorkspaceTab(next);
+  }, []);
+  // The catalog loads after mount, so a guest the user placed first only enters
+  // the tab set once it answers. Until someone picks a tab or a trigger opens
+  // one, keep the initial tab in step with the catalog: the first shown tab may
+  // become that guest.
+  React.useEffect(() => {
+    if (workspaceTabChosenRef.current) return;
+    const { mobileWorkspaceTabOrder, mobileWorkspaceHiddenTabs } = useUIStore.getState();
+    const first = shownMobileWorkspaceTabs(mobileWorkspaceTabOrder, mobileWorkspaceHiddenTabs, guestTabModes)[0];
+    setWorkspaceTab((current) => (current === first ? current : first));
+  }, [guestTabModes]);
   // Opening the drawer itself lands on the last tab, unless the user has since
   // hidden it in Settings; then on their first tab. A trigger that asks for a
   // tab (a changed file in the chat) sets it on its own and opens it hidden or not.
@@ -230,9 +247,9 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
 
   const openFilesSurface = React.useCallback(() => {
     setPendingChangesDiff(null);
-    setWorkspaceTab('files');
+    selectWorkspaceTab('files');
     setWorkspaceOpen(true);
-  }, []);
+  }, [selectWorkspaceTab]);
 
   // The agent asked for a file to be shown: open the files drawer and stage
   // the path the way a chat file link does, so the surface routes to it.
@@ -255,9 +272,9 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
 
   const openChangesSurface = React.useCallback((diff: { path: string; staged: boolean } | null = null) => {
     setPendingChangesDiff(diff);
-    setWorkspaceTab('changes');
+    selectWorkspaceTab('changes');
     setWorkspaceOpen(true);
-  }, []);
+  }, [selectWorkspaceTab]);
 
   const leftResize = useIpadSidebarResize('left', 'openchamber.ipad.leftSidebarWidth', IPAD_LEFT_SIDEBAR_WIDTH);
   const rightResize = useIpadSidebarResize(
@@ -341,7 +358,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
         }
         // MCP lives in the Status tab now; old links to it land there.
         if (target === 'mcp') {
-          setWorkspaceTab('status');
+          selectWorkspaceTab('status');
           setWorkspaceOpen(true);
           return;
         }
@@ -606,7 +623,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
                 open={workspaceOpen}
                 onClose={closeWorkspace}
                 tab={workspaceTab}
-                onTabChange={setWorkspaceTab}
+                onTabChange={selectWorkspaceTab}
                 pendingChangesDiff={pendingChangesDiff}
                 onOpenPlan={setOpenPlan}
                 guestTabs={guestTabs}
