@@ -181,6 +181,9 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     const { mobileWorkspaceTabOrder, mobileWorkspaceHiddenTabs } = useUIStore.getState();
     const shown = shownMobileWorkspaceTabs(mobileWorkspaceTabOrder, mobileWorkspaceHiddenTabs, guestTabModes);
     setWorkspaceTab((current) => (shown.includes(current) ? current : shown[0]));
+    // The drawer is open on this tab now: a catalog that answers late must not
+    // switch the tab the user is already looking at.
+    workspaceTabChosenRef.current = true;
     setWorkspaceOpen(true);
   }, [guestTabModes]);
   // An extension panel that leaves the catalog (paused, removed, another
