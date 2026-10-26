@@ -71,6 +71,7 @@ import { DiagramEditor } from '@/components/diagram';
 import { EMPTY_CANVAS_READ, shouldShowFileCanvas, type FileCanvasHandle } from '@/components/views/files/fileCanvas';
 import { GuestFileEditor } from '@/components/views/files/GuestFileEditor';
 import { findGuestFileEditor, useGuestFileEditor } from '@/lib/guests/file-editors';
+import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { useGuestsStore } from '@/lib/guests/store';
 import { GUEST_FILE_EDITOR_CONTENT_MAX } from '@openchamber/sdk';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -2825,9 +2826,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     : draftContent.length <= GUEST_FILE_EDITOR_CONTENT_MAX);
   // Excalidraw drawings open in the Excalidraw extension. Without it they show
   // their text and a pointer to the Integrations card, where the runtime can
-  // install extensions at all.
+  // install extensions at all. Never on mobile: it loads the catalog for its
+  // drawer panels but shows no extension catalog to install from.
   const guestCatalogStatus = useGuestsStore((state) => state.status);
-  const suggestExcalidrawExtension = !claimedByGuest && isTextFile && guestCatalogStatus !== 'unsupported'
+  const suggestExcalidrawExtension = !claimedByGuest && isTextFile && guestCatalogStatus !== 'unsupported' && !isMobileSurfaceRuntime()
     && Boolean(selectedFile?.path && isExcalidrawFile(selectedFile.path));
   const canUseShikiFileView = isTextFile && !isMarkdown && !isDrawio && !hasCanvas
     && !(isHtml && htmlViewMode === 'preview')

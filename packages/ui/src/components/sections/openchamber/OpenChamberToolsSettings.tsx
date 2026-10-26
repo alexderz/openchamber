@@ -18,6 +18,7 @@ import {
 import { BUILTIN_BROWSER_PROVIDER, browserProviderGuests } from '@/lib/guests/browser-providers';
 import { loadGuestCatalog } from '@/lib/guests/load-catalog';
 import { useGuestsStore } from '@/lib/guests/store';
+import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { useAgentMemoryStore } from '@/stores/useAgentMemoryStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -146,7 +147,8 @@ export const OpenChamberToolsSettings: React.FC = () => {
   React.useEffect(() => {
     void loadGuestCatalog();
   }, []);
-  const providerGuests = React.useMemo(() => browserProviderGuests(guests), [guests]);
+  // Mobile loads the catalog for its drawer panels; it offers no provider choice.
+  const providerGuests = React.useMemo(() => (isMobileSurfaceRuntime() ? [] : browserProviderGuests(guests)), [guests]);
   // A selection whose extension is gone shows as the built-in: the server
   // already routes to it and resets the setting on the next action.
   const providerValue = providerGuests.some((guest) => guest.id === browserProvider)

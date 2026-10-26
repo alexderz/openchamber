@@ -4,7 +4,27 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
 import { loadGuestCatalog } from './load-catalog';
 import { useGuestsStore } from './store';
 
-afterEach(() => useGuestsStore.getState().resetForRuntimeSwitch(getRuntimeKey()));
+const originalWindow = globalThis.window;
+
+afterEach(() => {
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+  useGuestsStore.getState().resetForRuntimeSwitch(getRuntimeKey());
+});
+
+/** A browser window as the surface checks read it: stamped surface, Capacitor marker, VS Code bootstrap. */
+const installWindow = (options: { surface: 'desktop' | 'mobile'; capacitor?: boolean; vscode?: boolean }) => {
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: {
+      __OPENCHAMBER_SURFACE__: options.surface,
+      __VSCODE_CONFIG__: options.vscode ? {} : undefined,
+      Capacitor: { isNativePlatform: () => options.capacitor === true },
+      location: { protocol: 'https:', search: '', origin: 'https://openchamber.test' },
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    },
+  });
+};
 
 describe('catalog request diagnostics', () => {
   test('retains HTTP failures and clears them on a successful retry', async () => {
@@ -62,5 +82,37 @@ describe('catalog request diagnostics', () => {
       expect(useGuestsStore.getState().status).toBe('idle');
       expect(useGuestsStore.getState().failure).toBeNull();
     } finally { fetch.mockRestore(); }
+  });
+});
+
+describe('catalog by runtime', () => {
+  const hello = { id: 'hello', name: 'Hello', icon: 'window', capabilities: { requested: [], granted: [] } };
+
+  test('the hosted mobile surface loads the catalog', async () => {
+    installWindow({ surface: 'mobile' });
+    useGuestsStore.getState().resetForRuntimeSwitch(getRuntimeKey());
+    const fetch = spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ guests: [hello] }));
+    try {
+      await loadGuestCatalog();
+      expect(useGuestsStore.getState().status).toBe('ready');
+      expect(useGuestsStore.getState().guests).toEqual([hello]);
+    } finally { fetch.mockRestore(); }
+  });
+
+  test('the Capacitor app and VS Code stay unsupported without a request', async () => {
+    for (const options of [
+      { surface: 'mobile', capacitor: true },
+      { surface: 'desktop', vscode: true },
+    ] as const) {
+      installWindow(options);
+      useGuestsStore.getState().resetForRuntimeSwitch(getRuntimeKey());
+      const fetch = spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ guests: [hello] }));
+      try {
+        await loadGuestCatalog();
+        expect(useGuestsStore.getState().status).toBe('unsupported');
+        expect(useGuestsStore.getState().guests).toEqual([]);
+        expect(fetch.mock.calls).toHaveLength(0);
+      } finally { fetch.mockRestore(); }
+    }
   });
 });

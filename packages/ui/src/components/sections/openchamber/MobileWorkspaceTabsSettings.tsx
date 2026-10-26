@@ -2,7 +2,7 @@ import React from 'react';
 import { SettingsSection } from '@/components/sections/shared/SettingsSection';
 import { SettingsSortableVisibilityList } from '@/components/sections/shared/SettingsSortableVisibilityList';
 import { useI18n, type I18nKey } from '@/lib/i18n';
-import { orderMobileWorkspaceTabs, shownMobileWorkspaceTabs, type MobileWorkspaceTab } from '@/lib/mobileWorkspaceTabs';
+import { isBuiltInMobileWorkspaceTab, orderMobileWorkspaceTabs, shownMobileWorkspaceTabs, type BuiltInMobileWorkspaceTab } from '@/lib/mobileWorkspaceTabs';
 import { useUIStore } from '@/stores/useUIStore';
 
 const TAB_LABEL_KEYS = {
@@ -11,7 +11,7 @@ const TAB_LABEL_KEYS = {
   files: 'mobile.menu.files',
   terminal: 'mobile.menu.terminal',
   notes: 'contextRail.surface.notes',
-} satisfies Record<MobileWorkspaceTab, I18nKey>;
+} satisfies Record<BuiltInMobileWorkspaceTab, I18nKey>;
 
 /**
  * Order and visibility of the phone's workspace panel tabs. Stored per
@@ -27,7 +27,7 @@ export const MobileWorkspaceTabsSettings: React.FC = () => {
 
   const items = React.useMemo(() => {
     const shown = shownMobileWorkspaceTabs(order, hidden);
-    return orderMobileWorkspaceTabs(order).map((id) => ({
+    return orderMobileWorkspaceTabs(order).filter(isBuiltInMobileWorkspaceTab).map((id) => ({
       id,
       label: t(TAB_LABEL_KEYS[id]),
       visible: shown.includes(id),

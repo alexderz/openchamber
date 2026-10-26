@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 
 import { findGuestFileEditor } from './file-editors';
 import type { InstalledGuest } from './types';
@@ -10,6 +10,11 @@ const guest = (id: string, match: string[], overrides: Partial<InstalledGuest> =
   capabilities: { requested: [], granted: [] },
   fileEditors: [{ id: 'editor', title: `${id} editor`, match, entry: 'editor/index.html' }],
   ...overrides,
+});
+
+const originalWindow = globalThis.window;
+afterEach(() => {
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
 });
 
 describe('findGuestFileEditor', () => {
@@ -32,5 +37,13 @@ describe('findGuestFileEditor', () => {
   test('guests without file editors and unmatched files leave the file to the host', () => {
     expect(findGuestFileEditor([guest('x', ['*.x'], { fileEditors: undefined })], '/repo/a.x')).toBeNull();
     expect(findGuestFileEditor([guest('x', ['*.x'])], '/repo/a.md')).toBeNull();
+  });
+
+  test('the mobile surface keeps files with the host even though it loads the catalog', () => {
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { __OPENCHAMBER_SURFACE__: 'mobile', location: { protocol: 'https:', search: '' } },
+    });
+    expect(findGuestFileEditor([guest('excalidraw', ['*.excalidraw'])], '/repo/flow.excalidraw')).toBeNull();
   });
 });

@@ -81,6 +81,7 @@ import { toast } from '@/components/ui';
 // useMessageStore removed — messages now come from sync system
 import { getSettingsSurface } from '@/lib/settings/surface';
 import { isVSCodeRuntime } from '@/lib/desktop';
+import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';
 import { useTabletLayout } from '@/lib/device';
 import { useHardwareKeyboard } from '@/lib/hardwareKeyboard';
 import { isCapacitorApp } from '@/lib/platform';
@@ -3927,11 +3928,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         }
         if (reference.data !== undefined) issue.data = reference.data;
         // A chip can outlive the place it was attached in: the session may be
-        // open on mobile or VS Code, where extensions never load, or the
+        // open on mobile or VS Code, where extension attach is off, or the
         // extension may be paused or removed here. Say so instead of opening
         // an empty surface.
         const installed = useGuestsStore.getState().guests.find((entry) => entry.id === issue.providerId);
-        if (!installed || !isGuestActive(installed)) {
+        if (isMobileSurfaceRuntime() || !installed || !isGuestActive(installed)) {
             toast.info(t('chat.chatInput.toast.guestUnavailableHere'));
             return;
         }

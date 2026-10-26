@@ -53,7 +53,8 @@ Full-screen extension pages are separate from this rail registry. `contributes.p
   `ContextRailSurfacesDialog` edits this same order with drag handles beside
   the visibility checkboxes (`SettingsSortableVisibilityList`, which the phone's
   workspace tab settings also use; those tabs keep their own per-device order
-  and hidden set, `lib/mobileWorkspaceTabs.ts`), including hidden panels. Mouse, touch and keyboard
+  and hidden set, `lib/mobileWorkspaceTabs.ts`; extension panels are tabs there
+  too, see Mobile workspace drawer), including hidden panels. Mouse, touch and keyboard
   drops update the rail immediately; visibility changes and "Show all" preserve
   the order. Dialog reorders retain saved ids of unavailable extensions at the
   end of the preference. Escape cancels a drag before closing the dialog.
@@ -121,6 +122,69 @@ The float existed because collapsing straight back into the layout squeezed
 the chat to nothing and the transcript measured its rows at that width; with
 the chat column never below its minimum that cannot happen.
 
+## Mobile workspace drawer
+
+The hosted mobile surface (phone, foldable front screen, tablet) shows the
+workspace as a drawer, or as a side panel on a tablet
+(`apps/MobileWorkspaceDrawer.tsx`). Its tabs are the five built-in ones
+(Status, Git, Files, Terminal, Notes) plus one tab per extension panel.
+
+- A panel tab is the desktop rail's list: `enabledGuestSurfaces` through
+  `useGuestSurfaces`, in catalog order, so rail and drawer agree on what a
+  panel is. `useMobileGuestTabs` turns it into tabs (name, icon through the
+  rail's resolver, layout) and also loads the catalog.
+- The tab id is the context panel mode, `plugin:<guest id>`
+  (`pluginModeFromId`). Stored order and hidden set (`useUIStore`) stay plain
+  strings, so nothing is migrated: an older build drops `plugin:` ids as it
+  drops any unknown id, and a newer build reading an older order appends the
+  panels after the built-in tabs.
+- The helpers in `lib/mobileWorkspaceTabs.ts` take the ids of the panels on
+  offer. A saved `plugin:` id whose extension is not in the catalog now
+  (paused, removed, another runtime) is not shown but stays in the stored order
+  and hidden set, so it returns where the user put it. The store setters
+  re-insert such ids after the tab that preceded them. The last shown tab
+  cannot be hidden, and a panel counts as a tab.
+- When the open panel leaves the catalog, `MobileApp` falls back to the first
+  shown tab (`resolveMobileWorkspaceTab`).
+- Content is `GuestPanelContent`, the same component the desktop zone renders
+  (`ContextSurfacePanes`): the extension's page (`PluginPane`), a shared surface
+  (`GuestSurfacePane`), or the page docked beside the surface. A page stays
+  mounted once the tab was visited; a bare shared surface is mounted only while
+  shown, so an unwatched surface holds no socket (`guestPanelUnmountsWhenHidden`).
+- Nothing else of the catalog switches on for mobile. Pages, actions, commands,
+  Work Status sections, attach rows, file editors, browser providers, the
+  extension catalog in Integrations, popovers, `openSurface` and `openCommit`
+  stay off or answer `UNSUPPORTED`, each at its own gate. Tool presentation
+  (`contributes.tools`) reads the store directly and applies in the mobile chat
+  as on web. The Capacitor app and VS Code keep the catalog `unsupported`.
+
+### Why the hosted mobile catalog loads and the Capacitor app does not
+
+The catalog used to be `unsupported` on every mobile surface. The hosted
+surface is a normal browser, where guest iframes, grants and sockets behave as
+on desktop, so it loads the catalog. The Capacitor app runs the same UI inside
+a WebView nobody has tested with guest frames (iframe grants, sandboxed
+frames, safe-area insets, memory), so it keeps `unsupported` until someone
+does. The difference is one named check, `isCapacitorApp()`, in
+`lib/guests/load-catalog.ts`. Loading the catalog turns on every consumer that
+reads the store, so each one that must stay off on mobile has its own
+`isMobileSurfaceRuntime()` gate; file editors have it in `findGuestFileEditor`.
+
+### Why `plugin:<id>` for drawer tabs and not a new id scheme
+
+The rail already stores `plugin:<id>` in `contextRailOrder`, and
+`PluginPane`, `isPluginContextPanelMode` and the surface descriptors speak it.
+A second id for the same panel would need a mapping between the two, and the
+two lists would be able to disagree. Stored values stay plain strings because
+the persisted order already tolerates ids it does not know.
+
+### Why one shared component renders a panel on desktop and mobile
+
+The choice between page, shared surface and docked page used to live inside
+`ContextSurfacePanes`. Two copies of that branch would drift the first time a
+layout was added. `GuestPanelContent` and `guestPanelLayout` are the one
+place; each host only decides when the panel is shown.
+
 ## Adding a surface
 
 1. Built-in: add a `ContextPanelMode` value in `packages/ui/src/lib/surfaces/modes.ts`
@@ -135,7 +199,8 @@ the chat column never below its minimum that cannot happen.
    the desktop/web chat + menu that opens `plugin:${id}`. `"dialog"` opens a
    host window around the same iframe so the guest can pick an item and call
    `attach`. New Worktree also opens that window for dialog guests. The guest
-   still owns the list and HTTP. VS Code and mobile omit the row. Do not add
+   still owns the list and HTTP. VS Code and mobile omit the row (mobile shows
+   the panel as a drawer tab, not an attach target). Do not add
    a built-in mode for that guest.
 
 ## Tracker
@@ -262,7 +327,9 @@ chat/palette go through the `openContext*` actions in `useUIStore`.
   run the same handler (`zoneEscape.ts`), since a pane's React events do not
   pass through its frame.
 - Runtime scope: desktop/web `MainLayout` only. VS Code and the dedicated
-  mobile shell have their own layouts and do not consume this registry.
+  mobile shell have their own layouts and do not consume this registry; the
+  mobile drawer takes only the extension panels from it (Mobile workspace
+  drawer).
   Trackers have no rail surface: their items list on the issues and PRs board
   (`components/sourceBoard`). A Linear tab persisted by an older version is
   dropped on load, like any unknown mode.

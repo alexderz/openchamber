@@ -73,7 +73,8 @@ import { MobileSourceBoard } from '@/components/sourceBoard/SourceBoardView';
 import { OverviewPage } from '@/components/overview/OverviewView';
 import { ScheduledTasksView, type ScheduledTasksLeaveReason } from '@/components/session/ScheduledTasksDialog';
 import { MobileWorkspaceDrawer } from './MobileWorkspaceDrawer';
-import { shownMobileWorkspaceTabs, type MobileWorkspaceTab } from '@/lib/mobileWorkspaceTabs';
+import { useMobileGuestTabs } from '@/hooks/useMobileGuestTabs';
+import { resolveMobileWorkspaceTab, shownMobileWorkspaceTabs, type MobileWorkspaceTab } from '@/lib/mobileWorkspaceTabs';
 import { DedicatedMobileAppProvider, type MobileAppActions } from './mobileAppContext';
 import { autoConnectLastInstance, getAutoConnectTargetLabel, logMobileConnectEvent, reprobeActiveConnection, suppressAutoConnectUntilManualConnect, type AutoConnectOutcome } from './mobileConnections';
 import { isCapacitorMobileApp, useNativeAndroidBackButton, useNativeMobileChrome, useNativeMobileLifecycle } from './mobileNativeChrome';
@@ -150,6 +151,8 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   // Phone right drawer with the workspace tabs; the tab persists across
   // open/close so the right-edge swipe reopens where the user left off.
   const [workspaceOpen, setWorkspaceOpen] = React.useState(false);
+  const guestTabs = useMobileGuestTabs();
+  const guestTabModes = React.useMemo(() => guestTabs.map((guestTab) => guestTab.mode), [guestTabs]);
   const [workspaceTab, setWorkspaceTab] = React.useState<MobileWorkspaceTab>(() => {
     const { mobileWorkspaceTabOrder, mobileWorkspaceHiddenTabs } = useUIStore.getState();
     return shownMobileWorkspaceTabs(mobileWorkspaceTabOrder, mobileWorkspaceHiddenTabs)[0];
@@ -159,10 +162,17 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   // tab (a changed file in the chat) sets it on its own and opens it hidden or not.
   const openWorkspace = React.useCallback(() => {
     const { mobileWorkspaceTabOrder, mobileWorkspaceHiddenTabs } = useUIStore.getState();
-    const shown = shownMobileWorkspaceTabs(mobileWorkspaceTabOrder, mobileWorkspaceHiddenTabs);
+    const shown = shownMobileWorkspaceTabs(mobileWorkspaceTabOrder, mobileWorkspaceHiddenTabs, guestTabModes);
     setWorkspaceTab((current) => (shown.includes(current) ? current : shown[0]));
     setWorkspaceOpen(true);
-  }, []);
+  }, [guestTabModes]);
+  // An extension panel that leaves the catalog (paused, removed, another
+  // server) takes its tab with it; the drawer falls back to the first shown tab.
+  React.useEffect(() => {
+    const { mobileWorkspaceTabOrder, mobileWorkspaceHiddenTabs } = useUIStore.getState();
+    const resolved = resolveMobileWorkspaceTab(workspaceTab, mobileWorkspaceTabOrder, mobileWorkspaceHiddenTabs, guestTabModes);
+    if (resolved !== workspaceTab) setWorkspaceTab(resolved);
+  }, [guestTabModes, workspaceTab]);
   // A plan opened from the workspace drawer's Notes tab, shown as a fullscreen
   // layer on top of it (back returns to the notes).
   const [openPlan, setOpenPlan] = React.useState<{ id: string; title: string; projectRef: ProjectRef } | null>(null);
@@ -599,6 +609,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
                 onTabChange={setWorkspaceTab}
                 pendingChangesDiff={pendingChangesDiff}
                 onOpenPlan={setOpenPlan}
+                guestTabs={guestTabs}
                 variant={workspaceAsPanel ? 'panel' : 'drawer'}
               />
             </ErrorBoundary>
