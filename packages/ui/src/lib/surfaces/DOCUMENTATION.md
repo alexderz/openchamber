@@ -152,8 +152,8 @@ workspace as a drawer, or as a side panel on a tablet
   mounted once the tab was visited; a bare shared surface is mounted only while
   shown, so an unwatched surface holds no socket (`guestPanelUnmountsWhenHidden`).
 - The tab strip is `fit` for the built-in tabs alone (their labels are short
-  and bounded) and `scrollable` once there are more than five tabs or a panel is
-  on offer. Fit mode keeps the active label at its intrinsic width inside an
+  and bounded) and `scrollable` when any extension panel is on offer. Fit mode
+  keeps the active label at its intrinsic width inside an
   overflow-hidden track, which clips the tail at phone width; a panel's
   `panel.name` is arbitrary, so any panel routes to the scrollable track, whose
   edges fade, whose active tab scrolls into view, and whose labels are capped at
@@ -197,15 +197,19 @@ The choice between page, shared surface and docked page used to live inside
 layout was added. `GuestPanelContent` and `guestPanelLayout` are the one
 place; each host only decides when the panel is shown.
 
-### Why the strip switches to scrollable past a fixed count
+### Why the strip switches to scrollable when any panel is on offer
 
-The built-in five are `fit`: their labels are short, so the active pill fills
-the row and the icons after it still fit at 390 px. A sixth tab, or a panel
-whose name the package chose, does not, and the Status tab also gives up ~40 px
-to its section picker. The alternative — capping the label in fit mode — needs
-a new prop on the shared strip that only this caller would use; switching the
-`layoutMode` the drawer already passes covers both the count and the arbitrary
-name with the edge fades and scroll-into-view the strip already has.
+The built-in five are `fit`: their labels are short and bounded, so the active
+pill fills the row and the icons after it still fit at 390 px. An extension
+panel is not, and the Status tab also gives up ~40 px to its section picker.
+The count is not the trigger — the five built-ins always fit — so the rule is
+"when any extension panel is on offer". The alternative — capping the label in
+fit mode — needs a new prop on the shared strip that only this caller would
+use; switching the `layoutMode` the drawer already passes covers the arbitrary
+name with the edge fades and scroll-into-view the strip already has. The cap
+itself still has to be passed in (`activePillButtonClassName`): an active-pill
+scrollable strip sizes each tab to its label through the strip's intrinsic
+branch, which is the branch that omits its own `max-w-56`.
 
 ### Why a runtime switch drops the visited panel tabs instead of keying the pane
 

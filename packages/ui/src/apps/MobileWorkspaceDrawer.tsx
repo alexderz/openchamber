@@ -108,10 +108,14 @@ export const MobileWorkspaceDrawer: React.FC<{
   // ref skips the first run so an open guest tab still mounts on first open.
   const [runtimeKey, setRuntimeKey] = React.useState(getRuntimeKey);
   const visitedRuntimeKeyRef = React.useRef(runtimeKey);
-  React.useEffect(
-    () => subscribeRuntimeEndpointChanged((detail) => setRuntimeKey(detail.runtimeKey)),
-    [],
-  );
+  React.useEffect(() => {
+    const unsubscribe = subscribeRuntimeEndpointChanged((detail) => setRuntimeKey(detail.runtimeKey));
+    // A switch between the render above and this subscription would dispatch
+    // with no listener; compare once so it is not missed.
+    const current = getRuntimeKey();
+    if (current !== visitedRuntimeKeyRef.current) setRuntimeKey(current);
+    return unsubscribe;
+  }, []);
   React.useEffect(() => {
     if (visitedRuntimeKeyRef.current === runtimeKey) return;
     visitedRuntimeKeyRef.current = runtimeKey;
@@ -193,12 +197,13 @@ export const MobileWorkspaceDrawer: React.FC<{
   const soleTab = tabItems.length === 1 ? tabItems[0] : null;
   // Fit mode keeps the active tab's label at its intrinsic width inside an
   // overflow-hidden track, so the tail icons clip once the tabs no longer fit
-  // the phone width — the 412 px drawer cuts the sixth tab, and the Status tab
-  // has ~40 px less room while its section picker sits in the header. Past five
-  // tabs, and for any extension panel whose `panel.name` is unbounded, use the
-  // scrollable track: it fades the edges, scrolls the active tab into view, and
-  // the label cap below keeps one long name from crowding the rest out.
-  const stripLayoutMode = tabItems.length > 5 || tabItems.some((item) => !isBuiltInMobileWorkspaceTab(item.id)) ? 'scrollable' : 'fit';
+  // the phone width — the Status tab has ~40 px less room while its section
+  // picker sits in the header, and an extension panel's `panel.name` is
+  // unbounded. When any extension panel is on offer, use the scrollable track:
+  // it fades the edges, scrolls the active tab into view, and the label cap
+  // below keeps one long name from crowding the rest out. The five built-ins
+  // alone stay in fit mode.
+  const stripLayoutMode = tabItems.some((item) => !isBuiltInMobileWorkspaceTab(item.id)) ? 'scrollable' : 'fit';
   // A long press on a tab drags it; the new order covers hidden tabs too.
   const reorderTabs = (activeId: string, overId: string) => {
     const all = orderMobileWorkspaceTabs(tabOrder, guestTabModes);
@@ -234,8 +239,10 @@ export const MobileWorkspaceDrawer: React.FC<{
               variant="active-pill"
               nonCompositedIndicator
               // Cap a long panel name so it truncates instead of widening the
-              // active tab past the strip. The scrollable track sizes tabs by
-              // their labels (active-pill + scrollable), so it needs this too.
+              // active tab past the strip. The strip's own `max-w-56` sits in
+              // its non-intrinsic branch; an active-pill scrollable strip takes
+              // the intrinsic branch (`useIntrinsicPillSizing`) and sizes each
+              // tab to its label, so the cap has to be passed in here.
               activePillButtonClassName="max-w-56"
               // More than three tabs don't fit with labels: the active tab
               // keeps icon + label, the rest collapse to icons.
