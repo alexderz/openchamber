@@ -151,6 +151,18 @@ workspace as a drawer, or as a side panel on a tablet
   (`GuestSurfacePane`), or the page docked beside the surface. A page stays
   mounted once the tab was visited; a bare shared surface is mounted only while
   shown, so an unwatched surface holds no socket (`guestPanelUnmountsWhenHidden`).
+- The tab strip is `fit` for the built-in tabs alone (their labels are short
+  and bounded) and `scrollable` once there are more than five tabs or a panel is
+  on offer. Fit mode keeps the active label at its intrinsic width inside an
+  overflow-hidden track, which clips the tail at phone width; a panel's
+  `panel.name` is arbitrary, so any panel routes to the scrollable track, whose
+  edges fade, whose active tab scrolls into view, and whose labels are capped at
+  `max-w-56` (`activePillButtonClassName`). Long-press drag-to-reorder is
+  unchanged: the sensors and sorting strategy do not depend on the layout mode.
+- A runtime switch drops the visited panel tabs and keeps the built-in ones.
+  `visitedTabs` is keyed by tab id alone, and the same `plugin:<id>` on the next
+  server is a different extension; kept visited, its iframe would mount again
+  without the user opening it.
 - Nothing else of the catalog switches on for mobile. Pages, actions, commands,
   Work Status sections, attach rows, file editors, browser providers, the
   extension catalog in Integrations, popovers, `openSurface` and `openCommit`
@@ -184,6 +196,25 @@ The choice between page, shared surface and docked page used to live inside
 `ContextSurfacePanes`. Two copies of that branch would drift the first time a
 layout was added. `GuestPanelContent` and `guestPanelLayout` are the one
 place; each host only decides when the panel is shown.
+
+### Why the strip switches to scrollable past a fixed count
+
+The built-in five are `fit`: their labels are short, so the active pill fills
+the row and the icons after it still fit at 390 px. A sixth tab, or a panel
+whose name the package chose, does not, and the Status tab also gives up ~40 px
+to its section picker. The alternative — capping the label in fit mode — needs
+a new prop on the shared strip that only this caller would use; switching the
+`layoutMode` the drawer already passes covers both the count and the arbitrary
+name with the edge fades and scroll-into-view the strip already has.
+
+### Why a runtime switch drops the visited panel tabs instead of keying the pane
+
+A panel pane could carry the runtime key in its React `key`, remounting it on a
+switch the way the desktop browser panes key by directory. `visitedTabs` is what
+decides whether a pane mounts at all, so dropping its guest entries on the
+switch is the smaller change and it also keeps the pane unmounted until the user
+opens it again. The built-in tabs stay visited: they are the same tab on every
+server.
 
 ## Adding a surface
 
