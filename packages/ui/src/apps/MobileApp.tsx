@@ -448,6 +448,13 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
 
   useNativeAndroidBackButton(handleNativeBack);
 
+  // Layers MobileApp shows above the workspace drawer — the same state
+  // `handleNativeBack` steps through above it (a plan, an app-level fullscreen
+  // surface, the sessions sheet). The drawer yields Escape while one is open,
+  // so one press closes the top layer and not the drawer underneath, exactly
+  // as one back press does.
+  const escapeYieldsToLayer = openPlan !== null || activeSurface !== null || sessionsSheetOpen;
+
   // The footer update item follows the shared update store, which in the
   // Capacitor shell tracks the app build (store updates), not the server. The
   // native app reaches server updates through Settings → About instead.
@@ -651,6 +658,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
                 variant={workspaceAsPanel ? 'panel' : 'drawer'}
                 expanded={workspaceExpanded}
                 onExpandedChange={setWorkspaceExpanded}
+                escapeYieldsToLayer={escapeYieldsToLayer}
               />
             </ErrorBoundary>
           </div>

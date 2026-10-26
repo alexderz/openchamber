@@ -124,22 +124,6 @@ export const MobileFullscreenSurface: React.FC<MobileFullscreenSurfaceProps> = (
       (focusable ?? surface).focus({ preventScroll: true });
     };
     const focusTimer = window.setTimeout(focusFirstElement, ENTER_DELAY_MS);
-    // Claim Escape for this surface BEFORE the drawers underneath see it. The
-    // workspace drawer listens on `document` in the bubble phase and skips an
-    // Escape that is already `defaultPrevented`; this surface's own close
-    // listener below is also on `document` in the bubble phase, but it is
-    // registered AFTER the drawer's (the drawer mounts first), so it cannot make
-    // the claim itself — on one press the drawer would collapse the panel and
-    // this surface would then close too. The capture phase runs before every
-    // bubble listener at `document`, whatever the mount order, so the claim is
-    // made here and the close stays in the bubble phase: content inside the
-    // surface (the source board's list) stops Escape's propagation to close
-    // itself without dismissing the surface, exactly as before.
-    const claimEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || disableEscapeDismiss) return;
-      if (isIMECompositionEvent(event)) return;
-      event.preventDefault();
-    };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !disableEscapeDismiss) {
         if (isIMECompositionEvent(event)) return;
@@ -168,12 +152,10 @@ export const MobileFullscreenSurface: React.FC<MobileFullscreenSurfaceProps> = (
         first.focus({ preventScroll: true });
       }
     };
-    document.addEventListener('keydown', claimEscape, true);
     document.addEventListener('keydown', handleKeyDown);
     return () => {
       window.clearTimeout(focusTimer);
       document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', claimEscape, true);
       document.removeEventListener('keydown', handleKeyDown);
       previousFocusRef.current?.focus?.({ preventScroll: true });
       previousFocusRef.current = null;
