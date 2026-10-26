@@ -177,10 +177,14 @@ workspace as a drawer, or as a side panel on a tablet
   expanded state is memory only: it resets when the panel closes and when
   `roomyForPanels` leaves (rotation, fold). Escape and the Android back button
   collapse an expanded panel first, then close as before.
-- Escape is layered: a surface above the panel (a plan, settings, the source
-  board) claims the key with `preventDefault` from a capture listener in
-  `MobileFullscreenSurface`, and the drawer skips a `defaultPrevented` Escape,
-  so one press closes the surface and leaves the panel under it alone.
+- Escape is layered: while a layer MobileApp owns sits above the panel (a plan,
+  an app-level fullscreen surface, the sessions sheet), `MobileApp` passes the
+  drawer `escapeYieldsToLayer` and the drawer's Escape handler returns early, so
+  one press closes that layer and leaves the panel under it alone. The same
+  state orders the Android back button (`handleNativeBack`), so the key and the
+  button agree. A control inside the drawer that consumes Escape itself (a model
+  picker closing its list, a diff find bar) still does so via the drawer's
+  `defaultPrevented` check.
 - Expanded, the covered chat column and tablet session sidebar are `inert`
   (`MobileCoveredByPanel`), so Tab and the accessibility tree stay in the
   panel; the inline panel and the phone drawer keep both reachable.
@@ -194,6 +198,20 @@ workspace as a drawer, or as a side panel on a tablet
   stay off or answer `UNSUPPORTED`, each at its own gate. Tool presentation
   (`contributes.tools`) reads the store directly and applies in the mobile chat
   as on web. The Capacitor app and VS Code keep the catalog `unsupported`.
+
+### Why Escape yields by shell state and not a capture-phase claim
+
+Escape is layered by `MobileApp` state: the shell tells the drawer
+`escapeYieldsToLayer` while a plan, an app-level fullscreen surface or the
+sessions sheet is open, and the drawer's Escape handler returns early. The
+alternative — `MobileFullscreenSurface` marking Escape `defaultPrevented` from a
+`document` capture listener so the drawer skips it — was tried and removed: the
+capture claim fires before the key reaches any handler inside the surface, so a
+control that guards on `defaultPrevented` (the model picker closing its own
+list) then ignored Escape and the whole surface closed instead. Yielding on the
+shell's own ordered state also keeps Escape and the Android back button from
+disagreeing about which layer is on top; `defaultPrevented` stays only for a
+control inside the drawer that genuinely consumes the key.
 
 ### Why the hosted mobile catalog loads and the Capacitor app does not
 

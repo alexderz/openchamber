@@ -36,7 +36,30 @@ const alphaTab: MobileGuestTab = { mode: 'plugin:alpha', label: 'Alpha Panel', i
 
 const PANE_TEXT = 'This panel failed to load.';
 
-const createHarness = async (options: { coveredColumns?: boolean; planSurface?: boolean } = {}) => {
+// Stand-in for a handler nested inside a surface that skips an Escape already
+// `defaultPrevented` and consumes the key itself (ModelPickerList: on Escape it
+// closes its list and stops propagation). It must still receive the key, and
+// the surface it lives in must stay open when it does.
+const NestedEscapeConsumer: React.FC<{ onEscape: () => void }> = ({ onEscape }) => {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const onEscapeRef = React.useRef(onEscape);
+  onEscapeRef.current = onEscape;
+  React.useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const handle = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.key !== 'Escape') return;
+      onEscapeRef.current();
+      event.stopPropagation();
+    };
+    element.addEventListener('keydown', handle);
+    return () => element.removeEventListener('keydown', handle);
+  }, []);
+  return <div ref={ref} data-testid="nested-escape" tabIndex={-1}>nested consumer</div>;
+};
+
+const createHarness = async (options: { coveredColumns?: boolean; planSurface?: boolean; nestedEscapeHandler?: boolean } = {}) => {
   const dom = new Window({ width: 1194, height: 834, url: 'http://mobile-drawer-expand.test' });
   const originals = new Map<string, PropertyDescriptor | undefined>();
   for (const [name, value] of Object.entries({
@@ -61,6 +84,7 @@ const createHarness = async (options: { coveredColumns?: boolean; planSurface?: 
   const root = createRoot(container);
   let closeCount = 0;
   let planCloseCount = 0;
+  let nestedEscapeCount = 0;
 
   // A controlled wrapper: the host owns `expanded` (MobileApp), like the real
   // call site, so Escape and the button both flow through one setter.
@@ -95,6 +119,7 @@ const createHarness = async (options: { coveredColumns?: boolean; planSurface?: 
           variant={variant}
           expanded={expanded}
           onExpandedChange={setExpanded}
+          escapeYieldsToLayer={planOpen}
         />
         {planOpen ? (
           <MobileFullscreenSurface
@@ -104,6 +129,9 @@ const createHarness = async (options: { coveredColumns?: boolean; planSurface?: 
             onClose={() => { planCloseCount += 1; setPlanOpen(false); }}
           >
             <div>plan body</div>
+            {options.nestedEscapeHandler ? (
+              <NestedEscapeConsumer onEscape={() => { nestedEscapeCount += 1; }} />
+            ) : null}
           </MobileFullscreenSurface>
         ) : null}
       </I18nProvider>
@@ -128,7 +156,13 @@ const createHarness = async (options: { coveredColumns?: boolean; planSurface?: 
     await dom.happyDOM.close();
   };
 
-  return { render, cleanup, closeCalls: () => closeCount, planCloseCalls: () => planCloseCount };
+  return {
+    render,
+    cleanup,
+    closeCalls: () => closeCount,
+    planCloseCalls: () => planCloseCount,
+    nestedEscapeCalls: () => nestedEscapeCount,
+  };
 };
 
 const findButton = (label: string) =>
@@ -245,6 +279,39 @@ test('Escape with a plan open while expanded closes only the plan', async () => 
     expect(findButton('Collapse panel')).toBeNull();
     expect(findButton('Expand panel')?.getAttribute('aria-pressed')).toBe('false');
     expect(closeCalls()).toBe(0);
+  } finally {
+    await cleanup();
+  }
+});
+
+test('a nested Escape consumer inside a surface still receives Escape', async () => {
+  const { render, cleanup, closeCalls, planCloseCalls, nestedEscapeCalls } = await createHarness({
+    planSurface: true,
+    nestedEscapeHandler: true,
+  });
+  try {
+    seed();
+    await render({ variant: 'panel' });
+    // The surface defers its children until the enter slide settles, so wait
+    // for the consumer to mount before pressing Escape.
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 400)); });
+    const consumer = document.body.querySelector('[data-testid="nested-escape"]');
+    expect(consumer).not.toBeNull();
+
+    // Dispatched on the consumer element, not `document`: a real keydown has a
+    // target inside the tree, so a document-capture claim would run first and
+    // mark the event `defaultPrevented` before the consumer saw it.
+    await act(async () => {
+      consumer?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // It received the key (nothing claimed it in the capture phase), handled it
+    // itself, and stopped it: the surface above and the drawer below both stay.
+    expect(nestedEscapeCalls()).toBe(1);
+    expect(planCloseCalls()).toBe(0);
+    expect(closeCalls()).toBe(0);
+    expect(document.body.textContent).toContain('plan body');
   } finally {
     await cleanup();
   }

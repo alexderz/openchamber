@@ -62,7 +62,11 @@ export const MobileWorkspaceDrawer: React.FC<{
   expanded?: boolean;
   /** Panel host only: toggled by the header button, Escape and the Android back button. */
   onExpandedChange?: (expanded: boolean) => void;
-}> = ({ open, onClose, tab, onTabChange, pendingChangesDiff, onOpenPlan, guestTabs, variant = 'drawer', expanded = false, onExpandedChange }) => {
+  /** True while a layer MobileApp owns sits above this drawer (a plan, any
+      fullscreen surface, the sessions sheet). Escape then leaves the drawer
+      alone: the layer closes instead, one press, one layer. */
+  escapeYieldsToLayer?: boolean;
+}> = ({ open, onClose, tab, onTabChange, pendingChangesDiff, onOpenPlan, guestTabs, variant = 'drawer', expanded = false, onExpandedChange, escapeYieldsToLayer = false }) => {
   const { t, direction } = useI18n();
   const rootRef = React.useRef<HTMLElement | null>(null);
   const drawerRef = React.useRef<HTMLElement>(null);
@@ -83,6 +87,12 @@ export const MobileWorkspaceDrawer: React.FC<{
   React.useEffect(() => {
     onExpandedChangeRef.current = onExpandedChange;
   }, [onExpandedChange]);
+  // Escape reads this from its listener, registered once per open; the ref
+  // keeps the latest value reachable without re-registering the listener.
+  const escapeYieldsToLayerRef = React.useRef(escapeYieldsToLayer);
+  React.useEffect(() => {
+    escapeYieldsToLayerRef.current = escapeYieldsToLayer;
+  }, [escapeYieldsToLayer]);
   const tabOrder = useUIStore((state) => state.mobileWorkspaceTabOrder);
   const hiddenTabs = useUIStore((state) => state.mobileWorkspaceHiddenTabs);
   const setTabOrder = useUIStore((state) => state.setMobileWorkspaceTabOrder);
@@ -175,9 +185,15 @@ export const MobileWorkspaceDrawer: React.FC<{
       if (event.key !== 'Escape' || tabRef.current === 'terminal') return;
       if (isVimEditorEventTarget(event.target)) return;
       if (isIMECompositionEvent(event)) return;
-      // A surface layered above (a plan, settings, the source board) claims
-      // Escape with `preventDefault` from a capture listener, so closing it and
-      // collapsing or closing the panel do not both happen on one press.
+      // A layer above (a plan, any fullscreen surface, the sessions sheet) owns
+      // Escape while it is open. The same state orders the Android back button
+      // (MobileApp `handleNativeBack`), so one press and one back press agree
+      // on which layer closes.
+      if (escapeYieldsToLayerRef.current) return;
+      // A control inside the drawer that consumes Escape itself — a model
+      // picker closing its list, a diff find bar — calls `preventDefault`;
+      // skipping it here keeps that control from also collapsing or closing
+      // the panel underneath.
       if (event.defaultPrevented) return;
       // Expanded over the app, Escape steps back to the side panel first; the
       // next Escape closes as it does today.
