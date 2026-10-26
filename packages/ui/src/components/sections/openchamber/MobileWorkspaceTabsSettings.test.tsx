@@ -126,6 +126,13 @@ describe('MobileWorkspaceTabsSettings', () => {
     // Its checkbox cannot change: the store still hides nothing.
     await act(async () => checkbox('plugin:alpha')?.click());
     expect(useUIStore.getState().mobileWorkspaceHiddenTabs).toEqual([...BUILT_INS, 'plugin:beta']);
+
+    // Showing a second panel lifts the lock: only a single visible tab locks,
+    // so the built-in rows are unlocked again.
+    await act(async () => checkbox('status')?.click());
+    expect(checkbox('status')?.getAttribute('aria-pressed')).toBe('true');
+    expect(checkbox('status')?.getAttribute('aria-disabled')).toBeNull();
+    expect(checkbox('plugin:alpha')?.getAttribute('aria-disabled')).toBeNull();
   });
 
   test('a saved panel id that is not on offer is not listed but keeps its place', async () => {

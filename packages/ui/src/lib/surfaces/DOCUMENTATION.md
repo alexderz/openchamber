@@ -146,13 +146,13 @@ workspace as a drawer, or as a side panel on a tablet
   cannot be hidden, and a panel counts as a tab.
 - Settings › General › Workspace panel tabs edits the same ids from the same
   source (`MobileWorkspaceTabsSettings` through `useMobileGuestTabs`), in the
-  stored order, with the strip's label and icon (`SettingsSortableVisibilityList`
-  takes an optional leading `icon` for a row). The last shown tab rule and the
-  reorder both count panels; a saved `plugin:` id that is not on offer is not
-  listed but keeps its place. This page renders on the desktop surface too,
-  where the catalog is loaded as well, so the same per-device store is edited in
-  both places. On VS Code and the Capacitor app the catalog is unsupported, so
-  only the built-ins show.
+  stored order, with the strip's label
+  (`SettingsSortableVisibilityList` renders rows label-only, like the desktop
+  `ContextRailSurfacesDialog`). The last shown tab rule and the reorder both
+  count panels; a saved `plugin:` id that is not on offer is not listed but
+  keeps its place. The list renders only where `useDeviceInfo().isMobile` is
+  true — a phone — so a desktop window and VS Code never show it. On the
+  Capacitor app the catalog is unsupported, so only the built-ins show.
 - When the open panel leaves the catalog, `MobileApp` falls back to the first
   shown tab (`resolveMobileWorkspaceTab`).
 - Content is `GuestPanelContent`, the same component the desktop zone renders
