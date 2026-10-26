@@ -14,8 +14,6 @@ interface SortableVisibilityItem {
   visible: boolean;
   /** Its checkbox cannot change, such as the last item that must stay shown. */
   locked?: boolean;
-  /** A leading mark before the label, such as an extension's own icon. */
-  icon?: React.ReactNode;
 }
 
 const SortableVisibilityRow: React.FC<{
@@ -42,9 +40,6 @@ const SortableVisibilityRow: React.FC<{
       >
         <Icon name="draggable" className="size-4" />
       </Button>
-      {item.icon ? (
-        <span aria-hidden className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">{item.icon}</span>
-      ) : null}
       <SettingsCheckboxRow
         settingsItem={settingsItem}
         checked={item.visible}
