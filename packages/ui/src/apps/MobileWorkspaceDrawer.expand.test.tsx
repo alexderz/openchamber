@@ -12,6 +12,8 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
 import { useUIStore } from '@/stores/useUIStore';
 import type { MobileGuestTab } from '@/hooks/useMobileGuestTabs';
 
+import { MobileCoveredByPanel } from './MobileCoveredByPanel';
+import { MobileFullscreenSurface } from './MobileFullscreenSurface';
 import { MobileWorkspaceDrawer } from './MobileWorkspaceDrawer';
 
 const SYNC_SDK = OpenCode.make({
@@ -34,7 +36,7 @@ const alphaTab: MobileGuestTab = { mode: 'plugin:alpha', label: 'Alpha Panel', i
 
 const PANE_TEXT = 'This panel failed to load.';
 
-const createHarness = async () => {
+const createHarness = async (options: { coveredColumns?: boolean; planSurface?: boolean } = {}) => {
   const dom = new Window({ width: 1194, height: 834, url: 'http://mobile-drawer-expand.test' });
   const originals = new Map<string, PropertyDescriptor | undefined>();
   for (const [name, value] of Object.entries({
@@ -58,15 +60,30 @@ const createHarness = async () => {
   document.body.append(container);
   const root = createRoot(container);
   let closeCount = 0;
+  let planCloseCount = 0;
 
   // A controlled wrapper: the host owns `expanded` (MobileApp), like the real
   // call site, so Escape and the button both flow through one setter.
   const Host: React.FC<{ variant: 'drawer' | 'panel'; open: boolean }> = ({ variant, open }) => {
     const [expanded, setExpanded] = useState(false);
+    // A plan surface layered above the drawer, the way MobileApp mounts it.
+    const [planOpen, setPlanOpen] = useState(Boolean(options.planSurface));
     return (
       <SyncProvider sdk={SYNC_SDK} directory="/project">
       <ThemeSystemProvider>
       <I18nProvider>
+        {/* The shell columns a covering panel hides, marked the way MobileApp
+            marks them: inert while the panel is expanded. */}
+        {options.coveredColumns ? (
+          <>
+            <MobileCoveredByPanel covered={expanded}>
+              <div data-testid="chat-column"><button type="button">chat</button></div>
+            </MobileCoveredByPanel>
+            <MobileCoveredByPanel covered={expanded}>
+              <aside data-testid="session-sidebar"><button type="button">sessions</button></aside>
+            </MobileCoveredByPanel>
+          </>
+        ) : null}
         <MobileWorkspaceDrawer
           open={open}
           onClose={() => { closeCount += 1; }}
@@ -79,6 +96,16 @@ const createHarness = async () => {
           expanded={expanded}
           onExpandedChange={setExpanded}
         />
+        {planOpen ? (
+          <MobileFullscreenSurface
+            open
+            variant="fullscreen"
+            title="Plan"
+            onClose={() => { planCloseCount += 1; setPlanOpen(false); }}
+          >
+            <div>plan body</div>
+          </MobileFullscreenSurface>
+        ) : null}
       </I18nProvider>
       </ThemeSystemProvider>
       </SyncProvider>
@@ -101,7 +128,7 @@ const createHarness = async () => {
     await dom.happyDOM.close();
   };
 
-  return { render, cleanup, closeCalls: () => closeCount };
+  return { render, cleanup, closeCalls: () => closeCount, planCloseCalls: () => planCloseCount };
 };
 
 const findButton = (label: string) =>
@@ -109,6 +136,14 @@ const findButton = (label: string) =>
 
 const escape = () => act(async () => {
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+
+// Dispatched on an element, not on `document`: a real keydown has a target
+// inside the tree, so `document` capture listeners run before `document`
+// bubble listeners — the ordering the surface's Escape claim relies on.
+const escapeFromBody = () => act(async () => {
+  document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
   await new Promise((resolve) => setTimeout(resolve, 0));
 });
 
@@ -184,6 +219,56 @@ test('Escape collapses a panel that is expanded before it closes', async () => {
     // Second Escape: nothing expanded, closes as today.
     await escape();
     expect(closeCalls()).toBe(1);
+  } finally {
+    await cleanup();
+  }
+});
+
+test('Escape with a plan open while expanded closes only the plan', async () => {
+  const { render, cleanup, closeCalls, planCloseCalls } = await createHarness({ planSurface: true });
+  try {
+    seed();
+    await render({ variant: 'panel' });
+    await act(async () => { findButton('Expand panel')?.click(); });
+    expect(findButton('Collapse panel')).not.toBeNull();
+    expect(planCloseCalls()).toBe(0);
+
+    // One Escape: the plan claims it (preventDefault) so the panel underneath
+    // does not also collapse and the drawer does not close.
+    await escapeFromBody();
+    expect(planCloseCalls()).toBe(1);
+    expect(findButton('Collapse panel')?.getAttribute('aria-pressed')).toBe('true');
+    expect(closeCalls()).toBe(0);
+
+    // The plan is gone: the next Escape collapses the panel as before.
+    await escapeFromBody();
+    expect(findButton('Collapse panel')).toBeNull();
+    expect(findButton('Expand panel')?.getAttribute('aria-pressed')).toBe('false');
+    expect(closeCalls()).toBe(0);
+  } finally {
+    await cleanup();
+  }
+});
+
+test('the covered chat column and session sidebar are inert while expanded', async () => {
+  const { render, cleanup } = await createHarness({ coveredColumns: true });
+  try {
+    seed();
+    await render({ variant: 'panel' });
+    const chatColumn = document.body.querySelector('[data-testid="chat-column"]');
+    const sessionSidebar = document.body.querySelector('[data-testid="session-sidebar"]');
+    expect(chatColumn).not.toBeNull();
+    expect(sessionSidebar).not.toBeNull();
+    expect(chatColumn?.hasAttribute('inert')).toBe(false);
+    expect(sessionSidebar?.hasAttribute('inert')).toBe(false);
+
+    await act(async () => { findButton('Expand panel')?.click(); });
+    expect(chatColumn?.hasAttribute('inert')).toBe(true);
+    expect(sessionSidebar?.hasAttribute('inert')).toBe(true);
+
+    await act(async () => { findButton('Collapse panel')?.click(); });
+    expect(chatColumn?.hasAttribute('inert')).toBe(false);
+    expect(sessionSidebar?.hasAttribute('inert')).toBe(false);
   } finally {
     await cleanup();
   }
