@@ -58,7 +58,11 @@ export const MobileWorkspaceDrawer: React.FC<{
   /** The extension panels on offer, in catalog order (`useMobileGuestTabs`). */
   guestTabs: readonly MobileGuestTab[];
   variant?: 'drawer' | 'panel';
-}> = ({ open, onClose, tab, onTabChange, pendingChangesDiff, onOpenPlan, guestTabs, variant = 'drawer' }) => {
+  /** Panel host only: the panel covers the app over the chat and the sidebar. */
+  expanded?: boolean;
+  /** Panel host only: toggled by the header button, Escape and the Android back button. */
+  onExpandedChange?: (expanded: boolean) => void;
+}> = ({ open, onClose, tab, onTabChange, pendingChangesDiff, onOpenPlan, guestTabs, variant = 'drawer', expanded = false, onExpandedChange }) => {
   const { t, direction } = useI18n();
   const rootRef = React.useRef<HTMLElement | null>(null);
   const drawerRef = React.useRef<HTMLElement>(null);
@@ -69,6 +73,16 @@ export const MobileWorkspaceDrawer: React.FC<{
   React.useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
+  // Escape and Android back read these from their listeners, which are
+  // registered once per open; the refs keep the latest toggle reachable.
+  const expandedRef = React.useRef(expanded);
+  React.useEffect(() => {
+    expandedRef.current = expanded;
+  }, [expanded]);
+  const onExpandedChangeRef = React.useRef(onExpandedChange);
+  React.useEffect(() => {
+    onExpandedChangeRef.current = onExpandedChange;
+  }, [onExpandedChange]);
   const tabOrder = useUIStore((state) => state.mobileWorkspaceTabOrder);
   const hiddenTabs = useUIStore((state) => state.mobileWorkspaceHiddenTabs);
   const setTabOrder = useUIStore((state) => state.setMobileWorkspaceTabOrder);
@@ -161,6 +175,12 @@ export const MobileWorkspaceDrawer: React.FC<{
       if (event.key !== 'Escape' || tabRef.current === 'terminal') return;
       if (isVimEditorEventTarget(event.target)) return;
       if (isIMECompositionEvent(event)) return;
+      // Expanded over the app, Escape steps back to the side panel first; the
+      // next Escape closes as it does today.
+      if (expandedRef.current) {
+        onExpandedChangeRef.current?.(false);
+        return;
+      }
       onCloseRef.current();
     };
     document.addEventListener('keydown', handleKeyDown);
@@ -262,6 +282,21 @@ export const MobileWorkspaceDrawer: React.FC<{
             <Icon name="equalizer-2" className="size-5" />
           </button>
         ) : null}
+        {/* Panel host only: cover the app over the chat (and the session
+            sidebar), the way the drawer already does on a phone. */}
+        {variant === 'panel' ? (
+          <button
+            type="button"
+            className="flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title={expanded ? t('contextPanel.actions.collapsePanel') : t('contextPanel.actions.expandPanel')}
+            aria-label={expanded ? t('contextPanel.actions.collapsePanel') : t('contextPanel.actions.expandPanel')}
+            aria-pressed={expanded}
+            onClick={() => onExpandedChange?.(!expanded)}
+            style={{ touchAction: 'manipulation' }}
+          >
+            <Icon name={expanded ? 'fullscreen-exit' : 'fullscreen'} className="size-5" />
+          </button>
+        ) : null}
         <button
           type="button"
           className="-me-1 flex size-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-interactive-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -349,7 +384,28 @@ export const MobileWorkspaceDrawer: React.FC<{
     // never gets its own compositing layer (iOS clips those to the safe-area
     // viewport, which is exactly what the drawer's settled `transform: none`
     // avoids on the other host).
-    return <div className="flex h-full min-h-0 flex-col bg-background text-foreground">{body}</div>;
+    //
+    // Expanded, the SAME element keeps its place in the tree and only changes
+    // presentation: `fixed inset-0` lifts it over the chat and the session
+    // sidebar at the drawer's own `z-50`, and the safe-area padding the aside
+    // gave it (padding-top + --oc-safe-area-*) is reapplied here because a
+    // viewport-anchored box no longer inherits the aside's inset. No portal
+    // and no remount, so an open editor, terminal or guest iframe keeps its
+    // state. See lib/surfaces/DOCUMENTATION.md for why the transformed/
+    // will-change ancestor is safe.
+    return (
+      <div
+        className={cn(
+          'flex min-h-0 flex-col bg-background text-foreground',
+          expanded
+            ? 'oc-keyboard-inset-surface oc-bottom-safe-surface fixed inset-0 z-50'
+            : 'h-full',
+        )}
+        style={expanded ? { paddingTop: 'var(--oc-safe-area-top, 0px)' } : undefined}
+      >
+        {body}
+      </div>
+    );
   }
 
   return createPortal(

@@ -151,6 +151,10 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   // Phone right drawer with the workspace tabs; the tab persists across
   // open/close so the right-edge swipe reopens where the user left off.
   const [workspaceOpen, setWorkspaceOpen] = React.useState(false);
+  // Tablet panel host: expanded, the panel covers the app over the chat and
+  // the session sidebar. Memory only, reset on close and when the room for a
+  // side-by-side layout leaves (rotation, fold).
+  const [workspaceExpanded, setWorkspaceExpanded] = React.useState(false);
   const guestTabs = useMobileGuestTabs();
   const guestTabModes = React.useMemo(() => guestTabs.map((guestTab) => guestTab.mode), [guestTabs]);
   const [workspaceTab, setWorkspaceTab] = React.useState<MobileWorkspaceTab>(() => {
@@ -293,6 +297,11 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   // drawer, which is the layout that actually works at that width.
   const workspaceAsPanel = roomyForPanels;
   const workspacePanelWidth = workspaceAsPanel && workspaceOpen ? rightResize.width : 0;
+  // Expanded is a presentation of the side panel: closing it, or losing the
+  // room for the panel (rotation to portrait, a fold), returns to the side.
+  React.useEffect(() => {
+    if (!workspaceOpen || !workspaceAsPanel) setWorkspaceExpanded(false);
+  }, [workspaceOpen, workspaceAsPanel]);
   const sidebarWidth = isTabletLayout && sidebarOpen ? leftResize.width : 0;
 
   // Publish the chat column's insets so overlays portaled to <body> (model
@@ -421,6 +430,10 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       closeSurface();
       return true;
     }
+    if (workspaceOpen && workspaceExpanded) {
+      setWorkspaceExpanded(false);
+      return true;
+    }
     if (workspaceOpen) {
       closeWorkspace();
       return true;
@@ -430,7 +443,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
       return true;
     }
     return false;
-  }, [activeSurface, closeSurface, closeWorkspace, openPlan, sessionsSheetOpen, workspaceOpen]);
+  }, [activeSurface, closeSurface, closeWorkspace, openPlan, sessionsSheetOpen, workspaceOpen, workspaceExpanded]);
 
   useNativeAndroidBackButton(handleNativeBack);
 
@@ -631,10 +644,12 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
                 onOpenPlan={setOpenPlan}
                 guestTabs={guestTabs}
                 variant={workspaceAsPanel ? 'panel' : 'drawer'}
+                expanded={workspaceExpanded}
+                onExpandedChange={setWorkspaceExpanded}
               />
             </ErrorBoundary>
           </div>
-          {workspacePanelWidth ? (
+          {workspacePanelWidth && !workspaceExpanded ? (
             <IpadSidebarResizeHandle
               side="right"
               isResizing={rightResize.isResizing}
