@@ -168,6 +168,15 @@ workspace as a drawer, or as a side panel on a tablet
   edges fade, whose active tab scrolls into view, and whose labels are capped at
   `max-w-56` (`activePillButtonClassName`). Long-press drag-to-reorder is
   unchanged: the sensors and sorting strategy do not depend on the layout mode.
+- On a tablet the panel can cover the app. Its header carries an expand/collapse
+  button beside close (shown only in the `panel` variant, reusing the desktop
+  context panel's `contextPanel.actions.expandPanel` / `collapsePanel` labels
+  and its `fullscreen` / `fullscreen-exit` icons). The SAME element only changes
+  presentation (`fixed inset-0 z-50`, with the aside's safe-area inset
+  reapplied), so an open editor, terminal or guest iframe keeps its state. The
+  expanded state is memory only: it resets when the panel closes and when
+  `roomyForPanels` leaves (rotation, fold). Escape and the Android back button
+  collapse an expanded panel first, then close as before.
 - A runtime switch drops the visited panel tabs and keeps the built-in ones.
   `visitedTabs` is keyed by tab id alone, and the same `plugin:<id>` on the next
   server is a different extension; kept visited, its iframe would mount again
@@ -228,6 +237,22 @@ decides whether a pane mounts at all, so dropping its guest entries on the
 switch is the smaller change and it also keeps the pane unmounted until the user
 opens it again. The built-in tabs stay visited: they are the same tab on every
 server.
+
+### Why the expanded tablet panel is a `fixed` overlay and not a portal
+
+The tablet panel renders inline in the layout `<aside>` so the chat keeps its
+place and the caller can animate the width. Covering the app without tearing the
+panes down means the element stays where it is and only its presentation
+changes: `fixed inset-0 z-50` with the safe-area padding the aside gave it. A
+portal into `<body>` (`createPortal`, what the phone drawer uses) moves the
+subtree to a different container, which remounts its DOM nodes and drops the
+state of a guest iframe, a terminal or an open editor — exactly what the
+expand/collapse toggle must preserve. `fixed` escapes the aside's
+`overflow-hidden` because the aside is not the fixed box's containing block, and
+the aside's only `will-change` is `width`, which does not create a containing
+block the way `will-change: transform` (or a `transform`, `filter` or `contain`
+ancestor) would. The aside's resize handle is dropped while expanded so its own
+`z-50` strip cannot sit over the panel.
 
 ## Adding a surface
 
